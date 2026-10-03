@@ -4,7 +4,9 @@ PawPal+ is a Streamlit app that helps a busy pet owner plan a day of pet care. Y
 
 The scheduling "brain" lives in plain Python classes (`pawpal_system.py`), so the same logic powers the Streamlit app, a command-line demo, and the test suite.
 
-## ✨ Features
+![Today's schedule in PawPal+: summary numbers, a time-clash warning with a one-click fix, the plan, and an explanation of what didn't fit](screenshots/03-schedule-clash.png)
+
+## Features
 
 - **A daily plan that fits your time.** Tell PawPal+ how many minutes you have, and it picks tasks by priority until the time runs out. High-priority things like meds and feeding always go in first.
 - **Sorting by time.** No matter what order you add tasks in, the plan and the task list are shown in the order they happen, by date and then by start time.
@@ -31,41 +33,42 @@ pip install -r requirements.txt
 
 ### Run it
 
-| What | Command |
-|------|---------|
-| The Streamlit app | `streamlit run app.py` (opens at http://localhost:8501) |
-| The command-line demo | `python main.py` |
-| The tests | `python -m pytest` |
+| What                  | Command                                                 |
+| --------------------- | ------------------------------------------------------- |
+| The Streamlit app     | `streamlit run app.py` (opens at http://localhost:8501) |
+| The command-line demo | `python main.py`                                        |
+| The tests             | `python -m pytest`                                      |
 
 ### Project files
 
-| File | What it's for |
-|------|---------------|
-| `pawpal_system.py` | The logic layer: the `Task`, `Pet`, `Owner`, and `Scheduler` classes, including saving and loading |
-| `app.py` | The Streamlit app, which only talks to the classes above |
-| `main.py` | A command-line demo that shows off every feature (it also supplies the app's sample data) |
-| `display.py` | Emojis and color badges shared by the app and the demo |
-| `tests/` | 47 automated tests: the logic (`test_pawpal.py`), the display helpers (`test_display.py`), and the app itself (`test_app.py`) |
-| `diagrams/uml_final.mmd` | The final class diagram (`diagrams/uml.mmd` is the same diagram) |
-| `data.json` | Your saved pets and tasks. Created by the app, and left out of git on purpose |
-| `reflection.md` | My notes on design choices, tradeoffs, testing, and working with AI |
-| `ai_interactions.md` | The agent workflow log and the two-model prompt comparison |
+| File                     | What it's for                                                                                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `pawpal_system.py`       | The logic layer: the `Task`, `Pet`, `Owner`, and `Scheduler` classes, including saving and loading                            |
+| `app.py`                 | The Streamlit app, which only talks to the classes above                                                                      |
+| `main.py`                | A command-line demo that shows off every feature (it also supplies the app's sample data)                                     |
+| `display.py`             | Emojis and color badges shared by the app and the demo                                                                        |
+| `tests/`                 | 47 automated tests: the logic (`test_pawpal.py`), the display helpers (`test_display.py`), and the app itself (`test_app.py`) |
+| `diagrams/uml_final.mmd` | The final class diagram (`diagrams/uml.mmd` is the same diagram)                                                              |
+| `screenshots/` | Screenshots of the app used in this README |
+| `data.json`              | Your saved pets and tasks. Created by the app, and left out of git on purpose                                                 |
+| `reflection.md`          | My notes on design choices, tradeoffs, testing, and working with AI                                                           |
+| `ai_interactions.md`     | The agent workflow log and the two-model prompt comparison                                                                    |
 
-## 📐 Smarter Scheduling
+## Smarter Scheduling
 
 These are the parts of the `Scheduler` (and `Task`) that make the plan smarter than a plain to-do list. All of them live in `pawpal_system.py`.
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | `Scheduler.sort_by_time()` | Orders tasks by due date, then start time, using `sorted()` with a lambda key. |
-| Priority-based scheduling | `Scheduler.sort_by_priority()` | Sorts by priority first (high, medium, low), then by start time. `build_daily_plan()` picks tasks in this order, and the app can show the plan this way. |
-| Daily plan | `Scheduler.build_daily_plan()`, `Scheduler.explain_plan()` | Picks today's unfinished tasks by priority until the owner's available minutes run out, then puts the plan in time order. Anything that doesn't fit goes in `scheduler.skipped`, and the explanation says why. |
-| Filtering | `Scheduler.filter_tasks(pet_name=..., completed=...)` | Shows one pet's tasks, only finished or unfinished tasks, or both at once. Leave an argument out to skip that filter. |
-| Conflict handling | `Scheduler.find_conflicting_pairs()`, `Scheduler.detect_conflicts()` | Flags any two tasks on the same day whose time ranges overlap, not just exact matches. It returns warning messages instead of raising errors, so the app keeps running and the owner decides what to move. |
-| Next available slot | `Scheduler.find_next_slot()`, `Scheduler.suggest_move()` | Walks the day's tasks in time order, tracking when the last busy stretch ends, and returns the first gap that's long enough. `suggest_move()` uses it to pick a new time for the lower-priority task in a clash. |
-| Recurring tasks | `Scheduler.complete_task()`, `Task.next_occurrence()` | Marking a daily or weekly task done adds a fresh copy for tomorrow or next week, using `timedelta`. A late task comes back starting from today, so it never lands on a date that's already gone. Marking the same task done twice doesn't make duplicates. |
+| Feature                   | Method(s)                                                            | Notes                                                                                                                                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task sorting              | `Scheduler.sort_by_time()`                                           | Orders tasks by due date, then start time, using `sorted()` with a lambda key.                                                                                                                                                                             |
+| Priority-based scheduling | `Scheduler.sort_by_priority()`                                       | Sorts by priority first (high, medium, low), then by start time. `build_daily_plan()` picks tasks in this order, and the app can show the plan this way.                                                                                                   |
+| Daily plan                | `Scheduler.build_daily_plan()`, `Scheduler.explain_plan()`           | Picks today's unfinished tasks by priority until the owner's available minutes run out, then puts the plan in time order. Anything that doesn't fit goes in `scheduler.skipped`, and the explanation says why.                                             |
+| Filtering                 | `Scheduler.filter_tasks(pet_name=..., completed=...)`                | Shows one pet's tasks, only finished or unfinished tasks, or both at once. Leave an argument out to skip that filter.                                                                                                                                      |
+| Conflict handling         | `Scheduler.find_conflicting_pairs()`, `Scheduler.detect_conflicts()` | Flags any two tasks on the same day whose time ranges overlap, not just exact matches. It returns warning messages instead of raising errors, so the app keeps running and the owner decides what to move.                                                 |
+| Next available slot       | `Scheduler.find_next_slot()`, `Scheduler.suggest_move()`             | Walks the day's tasks in time order, tracking when the last busy stretch ends, and returns the first gap that's long enough. `suggest_move()` uses it to pick a new time for the lower-priority task in a clash.                                           |
+| Recurring tasks           | `Scheduler.complete_task()`, `Task.next_occurrence()`                | Marking a daily or weekly task done adds a fresh copy for tomorrow or next week, using `timedelta`. A late task comes back starting from today, so it never lands on a date that's already gone. Marking the same task done twice doesn't make duplicates. |
 
-## 🧩 System Design
+## System Design
 
 PawPal+ has four classes. An `Owner` has `Pet`s, each `Pet` has `Task`s, and the `Scheduler` reads everything from the `Owner` to build the plan. The Streamlit app and the demo script only call these classes. All the logic lives in `pawpal_system.py`.
 
@@ -138,7 +141,7 @@ classDiagram
 
 The source for this diagram is in `diagrams/uml_final.mmd`.
 
-## 🖥️ Sample Output
+## Sample Output
 
 Here's what `python main.py` prints. The demo owner has two pets, eight tasks, and 90 minutes for pet care. The tasks are added out of order on purpose, and two of them start at 07:30, so you can see the sorting and the conflict warning:
 
@@ -222,7 +225,7 @@ A few things to notice:
 - From 07:30 on, a 20-minute task first fits at 08:20. A 60-minute task doesn't fit in the 08:20-09:00 gap, so it goes to 09:05, right after the flea medicine.
 - Finishing the daily walk adds a new walk for tomorrow, and finishing the weekly flea medicine adds one for next week. The one-time vet call just gets marked done.
 
-## 🧪 Testing PawPal+
+## Testing PawPal+
 
 Run the tests from the project folder (with the virtual environment turned on):
 
@@ -353,18 +356,42 @@ I gave the same prompt (write `next_occurrence()` for recurring tasks) to two mo
 9. **Filter the list.** Set "Show pet" to Mochi and "Show" to Done to see only Mochi's finished tasks.
 10. **Restart the app.** Stop it (Ctrl+C) and run `streamlit run app.py` again. Your pets and tasks are still there, loaded from `data.json`.
 
+### Screenshots
+
+These were taken from the running app after clicking **Load sample data**.
+
+**1. Your settings and pets.** The sidebar holds your name, your time for the day, and the sample data and start-over buttons. Each pet shows how many tasks it still has to do.
+
+![Sidebar settings and the Pets section](screenshots/01-overview.png)
+
+**2. Tasks.** Add a task, mark one done, edit or remove one, and filter the list. Every task gets an emoji for its type, a color-coded priority, and a status. The list is always in date and time order, even though the sample tasks were added out of order.
+
+![The Tasks section with the add form and the full task list](screenshots/02-tasks.png)
+
+**3. Today's schedule with a clash (step 6).** The plan uses all 90 minutes and explains why Fetch didn't fit. The walk and the vet call overlap, so there's a warning with the next free time and a button to move the vet call there.
+
+![Today's schedule showing a time-clash warning and a Move button](screenshots/03-schedule-clash.png)
+
+**4. Marking a daily task done (step 7).** After the clash is fixed, marking the morning walk done shows a confirmation, the walk turns ✅ done, and a fresh walk for tomorrow appears at the bottom of the list.
+
+![Confirmation message and the task list with tomorrow's walk added](screenshots/04-mark-done-recurring.png)
+
+**5. The fixed plan in priority order (step 5).** The vet call now sits at 08:20, so there are no clashes left. With **Order plan by** set to Priority, all high-priority tasks come first (including 18:00 Dinner), then the medium ones.
+
+![Today's schedule in priority order with no clashes](screenshots/05-schedule-priority.png)
+
 ### Scheduler behaviors you'll see
 
-| In the app | Scheduler method behind it |
-|------------|----------------------------|
-| Task list and plan always in time order | `sort_by_time()` |
-| High-priority tasks picked first when time is short, and the "Priority" plan order | `sort_by_priority()` inside `build_daily_plan()` |
-| "Didn't fit" count and the blue explanation box | `build_daily_plan()` + `explain_plan()` |
-| Yellow "Time clash" warnings | `find_conflicting_pairs()` + `detect_conflicts()` |
-| "Move ... to HH:MM" buttons | `suggest_move()` + `find_next_slot()` |
-| "Show pet" and "Show" filters | `filter_tasks()` |
-| "Mark done" bringing back tomorrow's task | `complete_task()` + `Task.next_occurrence()` |
-| Data still there after a restart | `Owner.save_to_json()` + `Owner.load_from_json()` |
+| In the app                                                                         | Scheduler method behind it                        |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Task list and plan always in time order                                            | `sort_by_time()`                                  |
+| High-priority tasks picked first when time is short, and the "Priority" plan order | `sort_by_priority()` inside `build_daily_plan()`  |
+| "Didn't fit" count and the blue explanation box                                    | `build_daily_plan()` + `explain_plan()`           |
+| Yellow "Time clash" warnings                                                       | `find_conflicting_pairs()` + `detect_conflicts()` |
+| "Move ... to HH:MM" buttons                                                        | `suggest_move()` + `find_next_slot()`             |
+| "Show pet" and "Show" filters                                                      | `filter_tasks()`                                  |
+| "Mark done" bringing back tomorrow's task                                          | `complete_task()` + `Task.next_occurrence()`      |
+| Data still there after a restart                                                   | `Owner.save_to_json()` + `Owner.load_from_json()` |
 
 ### The same features from the command line
 
