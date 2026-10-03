@@ -9,6 +9,8 @@ classDiagram
         +remove_pet(name: str) None
         +get_pet(name: str) Optional~Pet~
         +get_all_tasks() list~Task~
+        +save_to_json(path) None
+        +load_from_json(path)$ Owner
     }
 
     class Pet {
@@ -43,7 +45,10 @@ classDiagram
         +sort_by_time(tasks: list~Task~) list~Task~
         +sort_by_priority(tasks: list~Task~) list~Task~
         +filter_tasks(pet_name: str, completed: bool) list~Task~
+        +find_conflicting_pairs(tasks: list~Task~) list~tuple~
         +detect_conflicts(tasks: list~Task~) list~str~
+        +find_next_slot(duration_minutes: int, day: date, earliest: str, latest: str, ignore: Task) Optional~str~
+        +suggest_move(a: Task, b: Task) Optional~tuple~
         +complete_task(task: Task) Optional~Task~
         +explain_plan(plan: list~Task~) str
     }
@@ -56,3 +61,4 @@ classDiagram
 
     note for Task "time is HH:MM (24-hour)\npriority: low | medium | high\nfrequency: once | daily | weekly\nBad values raise ValueError"
     note for Scheduler "Pet.add_task() sets task.pet_name,\nso complete_task() can find the pet\nand add the next copy of a repeat task"
+    note for Owner "save_to_json / load_from_json keep\npets and tasks in data.json between runs"

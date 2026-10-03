@@ -100,9 +100,11 @@ For each feature I tested the normal case and then the edge cases where bugs lik
 
 These tests matter because the scheduler makes decisions for the owner. If sorting or recurrence is quietly wrong, someone could miss a med dose and never know why. All 28 tests passed on the first run, which made me a little suspicious, so I broke the code on purpose in five different ways to see if the tests would notice. Each time, the right test failed. That told me the tests were actually checking something and not just passing by default.
 
+Later, while doing the optional extensions, I added 19 more tests (47 total). They cover the next-free-slot finder, saving and loading, the display helpers, and three end-to-end tests that drive the actual Streamlit app. One of those exists because I found a bug by hand: marking a task done printed a wall of junk text under the message. My unit tests couldn't see it because it lived in the UI, so now there's a test that checks for it, and I confirmed it fails if the bug comes back.
+
 **b. Confidence**
 
-Pretty confident, about 4 out of 5. The core logic is well covered, and I know the tests can catch real mistakes. I'm not giving it a 5 because the Streamlit app itself isn't covered by automated tests (I checked it by clicking through it), and there are a few situations the code doesn't handle yet.
+Pretty confident, about 4 out of 5. The core logic is well covered, the main app flows have end-to-end tests, and I know the tests can catch real mistakes. I'm not giving it a 5 because there are still a few situations the code doesn't handle, and the app tests cover the main flows rather than every button.
 
 If I had more time, these are the edge cases I'd test next:
 
@@ -119,13 +121,13 @@ If I had more time, these are the edge cases I'd test next:
 
 I'm most happy with how the scheduler explains itself. It doesn't just spit out a list. It tells you how much time the plan uses, warns you about clashes with both tasks and times named, and says exactly which task didn't fit and why. That makes it something a real person could trust.
 
-I'm also happy with the split between logic and UI. All the real work happens in four small classes, and the Streamlit app, the command-line demo, and the 28 tests all use those same classes. When something needed fixing, there was only one place to fix it.
+I'm also happy with the split between logic and UI. All the real work happens in four small classes, and the Streamlit app, the command-line demo, and the 47 tests all use those same classes. When something needed fixing, there was only one place to fix it.
 
 **b. What you would improve**
 
-- **Save the data.** Right now everything lives in the browser session, so refreshing the page wipes your pets and tasks. Saving to a small JSON file would fix that.
 - **Handle tasks that run past midnight.** A late walk from 23:30 to 00:30 isn't checked against early tasks the next morning.
-- **Suggest a fix for conflicts.** The app only warns about clashes. It could also suggest the next open time slot for one of the tasks.
+- **Owner preferences.** I'd let owners mark times they're busy (like work hours), so the "next free slot" finder skips them too.
+- **Smarter conflict fixes.** Right now a suggested move only looks later in the same day. It could also look earlier, or offer the next day for low-priority tasks.
 - **Smarter fitting.** The greedy, priority-first approach can leave a few minutes unused. Trying to fill those gaps with smaller tasks would make better use of the owner's time.
 
 **c. Key takeaway**
