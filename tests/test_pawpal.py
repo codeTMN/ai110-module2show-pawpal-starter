@@ -271,3 +271,80 @@ def test_long_task_overlapping_two_later_tasks_flags_both(scheduler):
 
     assert len(warnings) == 2
     assert any("Meds" in w for w in warnings)
+
+
+# --- Next available slot (optional extension) -------------------------------------
+
+
+def test_next_slot_finds_first_gap_that_is_long_enough(owner, scheduler):
+    mochi = owner.get_pet("Mochi")
+    mochi.add_task(Task("Walk", "06:00", 30))  # 06:00-06:30
+    mochi.add_task(Task("Breakfast", "06:40", 10))  # 10-minute gap before this is too short for 20
+    mochi.add_task(Task("Meds", "07:30", 5))
+
+    assert scheduler.find_next_slot(20) == "06:50"
+
+
+def test_next_slot_handles_overlapping_busy_times(owner, scheduler):
+    mochi = owner.get_pet("Mochi")
+    mochi.add_task(Task("Hike", "06:00", 120))  # 06:00-08:00
+    mochi.add_task(Task("Breakfast", "06:30", 10))  # inside the hike, must not reset the clock
+
+    assert scheduler.find_next_slot(15) == "08:00"
+
+
+def test_next_slot_ignores_done_tasks_and_other_days(owner, scheduler):
+    mochi = owner.get_pet("Mochi")
+    done = Task("Walk", "06:00", 60)
+    done.mark_complete()
+    mochi.add_task(done)
+    mochi.add_task(Task("Vet", "06:00", 60, due_date=TODAY + ONE_DAY))
+
+    assert scheduler.find_next_slot(30) == "06:00"
+
+
+def test_next_slot_returns_none_when_the_day_is_full(owner, scheduler):
+    owner.get_pet("Mochi").add_task(Task("Long day out", "06:00", 960))  # 06:00-22:00
+
+    assert scheduler.find_next_slot(10) is None
+
+
+def test_suggest_move_picks_lower_priority_task_and_a_free_time(owner, scheduler):
+    walk = Task("Walk", "07:30", 30, priority="high")
+    brush = Task("Brush", "07:40", 15, priority="low")
+    owner.get_pet("Mochi").add_task(walk)
+    owner.get_pet("Luna").add_task(brush)
+
+    (a, b), = scheduler.find_conflicting_pairs([walk, brush])
+    to_move, new_time = scheduler.suggest_move(a, b)
+
+    assert to_move is brush
+    assert new_time == "08:00"  # right after the walk, not on top of itself
+
+
+# --- Saving and loading (optional extension) --------------------------------------
+
+
+def test_save_and_load_round_trip_keeps_everything(owner, tmp_path):
+    walk = Task("Walk", "07:30", 30, priority="high", frequency="daily")
+    owner.get_pet("Mochi").add_task(walk)
+    owner.get_pet("Luna").add_task(Task("Vet", "10:00", 45, due_date=TODAY + ONE_DAY))
+    walk.mark_complete()
+    path = tmp_path / "data.json"
+
+    owner.save_to_json(path)
+    loaded = Owner.load_from_json(path)
+
+    assert loaded == owner  # dataclasses compare every field, including nested pets and tasks
+    assert isinstance(loaded.get_pet("Luna").tasks[0].due_date, date)
+    assert loaded.get_pet("Mochi").tasks[0].pet_name == "Mochi"
+
+
+def test_loading_a_file_with_a_bad_value_raises(owner, tmp_path):
+    owner.get_pet("Mochi").add_task(Task("Walk", "07:30", 30))
+    path = tmp_path / "data.json"
+    owner.save_to_json(path)
+    path.write_text(path.read_text().replace('"07:30"', '"25:00"'))
+
+    with pytest.raises(ValueError):
+        Owner.load_from_json(path)

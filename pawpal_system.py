@@ -6,9 +6,11 @@ The Streamlit app (app.py) and the demo script should only talk to these classes
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+import json
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 from itertools import combinations
+from pathlib import Path
 
 PRIORITY_RANK = {"low": 1, "medium": 2, "high": 3}
 FREQUENCIES = ("once", "daily", "weekly")
@@ -23,6 +25,21 @@ def _to_minutes(hhmm: str) -> int:
     if not (0 <= hours < 24 and 0 <= minutes < 60):
         raise ValueError(f"Time must be between 00:00 and 23:59 (got {hhmm!r}).")
     return hours * 60 + minutes
+
+
+def _from_minutes(total: int) -> str:
+    """Turn minutes after midnight back into an "HH:MM" string."""
+    return f"{total // 60 % 24:02d}:{total % 60:02d}"
+
+
+def _overlaps(a: Task, b: Task) -> bool:
+    """True if two tasks on the same day overlap. Back-to-back tasks don't count."""
+    a_start, b_start = _to_minutes(a.time), _to_minutes(b.time)
+    return (
+        a.due_date == b.due_date
+        and a_start < b_start + b.duration_minutes
+        and b_start < a_start + a.duration_minutes
+    )
 
 
 @dataclass
@@ -47,7 +64,7 @@ class Task:
         if self.duration_minutes <= 0:
             raise ValueError("Duration must be at least 1 minute.")
         start = _to_minutes(self.time)  # raises ValueError if the time isn't "HH:MM"
-        self.time = f"{start // 60:02d}:{start % 60:02d}"  # store "8:05" as "08:05"
+        self.time = _from_minutes(start)  # store "8:05" as "08:05"
 
     def mark_complete(self) -> None:
         """Mark this task as done."""
@@ -67,8 +84,7 @@ class Task:
 
     def end_time(self) -> str:
         """Return when this task finishes as "HH:MM", based on its start time and duration."""
-        total = _to_minutes(self.time) + self.duration_minutes
-        return f"{total // 60 % 24:02d}:{total % 60:02d}"
+        return _from_minutes(_to_minutes(self.time) + self.duration_minutes)
 
     def priority_rank(self) -> int:
         """Return priority as a number (high = 3) so tasks sort in the right order."""
@@ -123,6 +139,34 @@ class Owner:
     def get_all_tasks(self) -> list[Task]:
         """Return every task from every pet in one list."""
         return [task for pet in self.pets for task in pet.tasks]
+
+    def save_to_json(self, path: str | Path) -> None:
+        """Save this owner, their pets, and all their tasks to a JSON file.
+
+        asdict() turns the nested dataclasses into plain dicts and lists, and dates are
+        written as "YYYY-MM-DD" text. The file is written to a temp file first and then
+        swapped in, so a crash mid-save can't leave a half-written data file behind.
+        """
+        path = Path(path)
+        temp = path.with_suffix(".tmp")
+        temp.write_text(json.dumps(asdict(self), indent=2, default=str))
+        temp.replace(path)
+
+    @classmethod
+    def load_from_json(cls, path: str | Path) -> Owner:
+        """Rebuild an owner, with pets and tasks, from a file made by save_to_json().
+
+        Tasks are rebuilt through the normal Task constructor, so a hand-edited file with
+        a bad value (like a 25:00 start time) raises ValueError instead of sneaking in.
+        """
+        data = json.loads(Path(path).read_text())
+        owner = cls(name=data["name"], available_minutes=data["available_minutes"])
+        for pet_data in data["pets"]:
+            pet = Pet(pet_data["name"], pet_data["species"], pet_data["age"])
+            for task_data in pet_data["tasks"]:
+                pet.add_task(Task(**{**task_data, "due_date": date.fromisoformat(task_data["due_date"])}))
+            owner.add_pet(pet)
+        return owner
 
 
 class Scheduler:
@@ -179,6 +223,14 @@ class Scheduler:
             tasks = [t for t in tasks if t.completed == completed]
         return tasks
 
+    def find_conflicting_pairs(self, tasks: list[Task]) -> list[tuple[Task, Task]]:
+        """Return every pair of tasks on the same day whose time slots overlap, earlier task first.
+
+        Checks every pair on purpose. Comparing only neighbors in time order is shorter,
+        but it misses a long task that runs into two later ones.
+        """
+        return [(a, b) for a, b in combinations(self.sort_by_time(tasks), 2) if _overlaps(a, b)]
+
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
         """Return a warning message for each pair of tasks on the same day whose time slots overlap.
 
@@ -186,17 +238,54 @@ class Scheduler:
         07:30 to 08:00 and breakfast at 08:00 don't clash. This only reports problems;
         it never raises and never moves tasks, so the owner decides what to change.
         """
-        warnings = []
-        for a, b in combinations(self.sort_by_time(tasks), 2):
-            if a.due_date != b.due_date:
-                continue
-            a_start, b_start = _to_minutes(a.time), _to_minutes(b.time)
-            if a_start < b_start + b.duration_minutes and b_start < a_start + a.duration_minutes:
-                warnings.append(
-                    f"{a.pet_name}'s {a.description} ({a.time}-{a.end_time()}) overlaps with "
-                    f"{b.pet_name}'s {b.description} ({b.time}-{b.end_time()})."
-                )
-        return warnings
+        return [
+            f"{a.pet_name}'s {a.description} ({a.time}-{a.end_time()}) overlaps with "
+            f"{b.pet_name}'s {b.description} ({b.time}-{b.end_time()})."
+            for a, b in self.find_conflicting_pairs(tasks)
+        ]
+
+    def find_next_slot(
+        self,
+        duration_minutes: int,
+        day: date | None = None,
+        earliest: str = "06:00",
+        latest: str = "22:00",
+        ignore: Task | None = None,
+    ) -> str | None:
+        """Return the earliest "HH:MM" start time on `day` where a task this long fits.
+
+        Walks through the day's unfinished tasks in time order, keeping track of when the
+        last busy stretch ends. The first gap that's long enough wins. Returns None if
+        nothing fits between `earliest` and `latest`. Pass `ignore` to leave out the task
+        you're trying to move, so it doesn't block itself.
+        """
+        day = day or date.today()
+        busy = [
+            t for t in self.owner.get_all_tasks()
+            if t.due_date == day and not t.completed and t is not ignore
+        ]
+        candidate = _to_minutes(earliest)
+        for task in self.sort_by_time(busy):
+            start = _to_minutes(task.time)
+            if candidate + duration_minutes <= start:
+                break  # the gap before this task is big enough
+            candidate = max(candidate, start + task.duration_minutes)
+        if candidate + duration_minutes > _to_minutes(latest):
+            return None
+        return _from_minutes(candidate)
+
+    def suggest_move(self, a: Task, b: Task) -> tuple[Task, str] | None:
+        """For two clashing tasks, suggest which one to move and the next free time for it.
+
+        Moves the lower-priority task (or the later one if they tie), and only looks for
+        times after its current start, since owners usually plan around a task's time.
+        Returns None if there's no free slot left that day.
+        """
+        to_move = a if a.priority_rank() < b.priority_rank() else b
+        slot = self.find_next_slot(
+            to_move.duration_minutes, day=to_move.due_date, earliest=to_move.time, ignore=to_move
+        )
+        return (to_move, slot) if slot else None
 
     def complete_task(self, task: Task) -> Task | None:
         """Mark a task done. If it repeats, add the next one to the same pet and return it.

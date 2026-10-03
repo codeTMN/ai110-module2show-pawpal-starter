@@ -1,21 +1,19 @@
+import os
 from dataclasses import replace
 from datetime import datetime, time
+from pathlib import Path
 
 import streamlit as st
 
+from display import priority_badge, status_badge, task_label
 from main import build_demo_owner
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
-# --- App memory -------------------------------------------------------------
-# Streamlit reruns this whole file on every click. Anything created here would be
-# rebuilt from scratch each time, so the Owner (and everything inside it) is kept
-# in session_state and only created on the very first run.
-if "owner" not in st.session_state:
-    st.session_state.owner = Owner(name="Jordan", available_minutes=120)
-    st.session_state.owner_name = "Jordan"
-    st.session_state.owner_minutes = 120
+# Pets and tasks are saved here after every change and loaded back on startup.
+# PAWPAL_DATA_FILE lets tests point the app at a throwaway file instead.
+DATA_FILE = Path(os.environ.get("PAWPAL_DATA_FILE", Path(__file__).with_name("data.json")))
 
 
 def use_owner(new_owner: Owner) -> None:
@@ -23,6 +21,24 @@ def use_owner(new_owner: Owner) -> None:
     st.session_state.owner = new_owner
     st.session_state.owner_name = new_owner.name
     st.session_state.owner_minutes = new_owner.available_minutes
+
+
+def load_saved_owner() -> Owner:
+    """Load the owner from DATA_FILE, or start fresh if there's no file or it can't be read."""
+    if DATA_FILE.exists():
+        try:
+            return Owner.load_from_json(DATA_FILE)
+        except (ValueError, KeyError, TypeError) as err:
+            st.session_state.load_error = f"Couldn't read {DATA_FILE.name}, so PawPal+ started fresh. ({err})"
+    return Owner(name="Jordan", available_minutes=120)
+
+
+# --- App memory -------------------------------------------------------------
+# Streamlit reruns this whole file on every click. Anything created here would be
+# rebuilt from scratch each time, so the Owner (and everything inside it) is kept
+# in session_state and only loaded on the very first run.
+if "owner" not in st.session_state:
+    use_owner(load_saved_owner())
 
 
 def mark_done(choices: list[Task], scheduler: Scheduler) -> None:
@@ -33,6 +49,13 @@ def mark_done(choices: list[Task], scheduler: Scheduler) -> None:
     if next_task:
         message += f" Since it repeats {task.frequency}, the next one is set for {next_task.due_date:%A, %B %d}."
     st.session_state.flash = ("success", message)
+
+
+def swap_task(old: Task, new: Task) -> None:
+    """Replace a task with an edited copy on the same pet."""
+    pet = st.session_state.owner.get_pet(old.pet_name)
+    pet.remove_task(old)
+    pet.add_task(new)
 
 
 def save_edit(task: Task) -> None:
@@ -51,10 +74,14 @@ def save_edit(task: Task) -> None:
         priority=form[f"edit_priority_{key}"],
         frequency=form[f"edit_repeats_{key}"],
     )
-    pet = form.owner.get_pet(task.pet_name)
-    pet.remove_task(task)
-    pet.add_task(edited)
-    form.flash = ("success", f"Saved your changes to {edited.description} for {pet.name}.")
+    swap_task(task, edited)
+    form.flash = ("success", f"Saved your changes to {edited.description} for {edited.pet_name}.")
+
+
+def move_task(task: Task, new_time: str) -> None:
+    """Button callback: move a clashing task to the suggested free time."""
+    swap_task(task, replace(task, time=new_time))
+    st.session_state.flash = ("success", f"Moved {task.description} for {task.pet_name} to {new_time}.")
 
 
 def remove_task(task: Task) -> None:
@@ -63,7 +90,19 @@ def remove_task(task: Task) -> None:
     st.session_state.flash = ("success", f"Removed {task.description} for {task.pet_name}.")
 
 
-def task_label(t: Task) -> str:
+def show_flash() -> None:
+    """Show the message a callback left behind, if there is one."""
+    if "flash" in st.session_state:
+        # A plain if/else on purpose: Streamlit prints any bare expression to the page,
+        # so a one-line "a if x else b" here would also dump the return value.
+        kind, message = st.session_state.pop("flash")
+        if kind == "error":
+            st.error(message)
+        else:
+            st.success(message)
+
+
+def pick_label(t: Task) -> str:
     """Short one-line name for a task, used in the pick lists."""
     return f"{t.due_date:%a %b %d}, {t.time} - {t.description} ({t.pet_name})"
 
@@ -74,11 +113,11 @@ def task_rows(tasks: list[Task]) -> list[dict]:
         {
             "Due": f"{t.due_date:%a %b %d}",
             "Time": f"{t.time}-{t.end_time()}",
-            "Task": t.description,
+            "Task": task_label(t),
             "Pet": t.pet_name,
-            "Priority": t.priority,
+            "Priority": priority_badge(t.priority),
             "Repeats": t.frequency,
-            "Done": t.completed,
+            "Status": status_badge(t),
         }
         for t in tasks
     ]
@@ -98,9 +137,12 @@ with st.sidebar:
     st.divider()
     st.button("Load sample data", on_click=use_owner, args=(build_demo_owner(),))
     st.button("Start over", on_click=use_owner, args=(Owner("Jordan", 120),))
+    st.caption(f"Your pets and tasks are saved to `{DATA_FILE.name}` automatically.")
 
 st.title("🐾 PawPal+")
 st.caption(f"Hi {owner.name}! Add your pets and their care tasks, and PawPal+ will plan your day.")
+if "load_error" in st.session_state:
+    st.warning(st.session_state.pop("load_error"))
 
 # --- Pets -------------------------------------------------------------------
 # Forms come before the lists they change. Because the script runs top to bottom,
@@ -123,9 +165,15 @@ with st.form("add_pet", clear_on_submit=True):
                 st.error(str(err))
 
 if owner.pets:
+    species_emoji = {"dog": "🐶", "cat": "🐱"}
     st.dataframe(
         [
-            {"Name": p.name, "Species": p.species, "Age": p.age, "Tasks to do": len(p.get_pending_tasks())}
+            {
+                "Name": f"{species_emoji.get(p.species, '🐾')} {p.name}",
+                "Species": p.species,
+                "Age": p.age,
+                "Tasks to do": len(p.get_pending_tasks()),
+            }
             for p in owner.pets
         ],
         hide_index=True,
@@ -164,14 +212,7 @@ else:
                 owner.get_pet(pet_choice).add_task(task)
                 st.success(f"Added \"{task.description}\" for {pet_choice} at {task.time}.")
 
-    if "flash" in st.session_state:
-        # A plain if/else on purpose: Streamlit prints any bare expression to the page,
-        # so a one-line "a if x else b" here would also dump the return value.
-        kind, message = st.session_state.pop("flash")
-        if kind == "error":
-            st.error(message)
-        else:
-            st.success(message)
+    show_flash()
 
     to_do = scheduler.sort_by_time(scheduler.filter_tasks(completed=False))
     if to_do:
@@ -179,7 +220,7 @@ else:
         col1.selectbox(
             "Mark a task done",
             options=range(len(to_do)),
-            format_func=lambda i: task_label(to_do[i]),
+            format_func=lambda i: pick_label(to_do[i]),
             key="done_choice",
         )
         col2.button("Mark done", on_click=mark_done, args=(to_do, scheduler))
@@ -191,7 +232,7 @@ else:
                 st.selectbox(
                     "Task to change",
                     options=range(len(every_task)),
-                    format_func=lambda i: task_label(every_task[i]),
+                    format_func=lambda i: pick_label(every_task[i]),
                     key="edit_choice",
                 )
             ]
@@ -257,14 +298,38 @@ else:
     col2.metric("Minutes used", f"{used} of {owner.available_minutes}")
     col3.metric("Didn't fit", len(scheduler.skipped))
 
-    for warning in scheduler.detect_conflicts(plan):
-        st.warning(f"**Time clash:** {warning} You may want to move one of them.", icon="⚠️")
+    # Each clash gets a warning plus a one-click fix: the lower-priority task (or the
+    # later one, on a tie) moves to the next free time that day.
+    pairs = scheduler.find_conflicting_pairs(plan)
+    for (a, b), warning in zip(pairs, scheduler.detect_conflicts(plan)):
+        suggestion = scheduler.suggest_move(a, b)
+        if suggestion:
+            to_move, new_time = suggestion
+            st.warning(
+                f"**Time clash:** {warning} The next free time for {to_move.description} is {new_time}.",
+                icon="⚠️",
+            )
+            st.button(
+                f"Move {to_move.description} ({to_move.pet_name}) to {new_time}",
+                key=f"move_{id(to_move)}_{id(a)}_{id(b)}",
+                on_click=move_task,
+                args=(to_move, new_time),
+            )
+        else:
+            st.warning(f"**Time clash:** {warning} There's no free time left today to move either one.", icon="⚠️")
 
     if plan:
+        order = st.radio("Order plan by", ["Time", "Priority"], horizontal=True)
+        shown = plan if order == "Time" else scheduler.sort_by_priority(plan)
         st.dataframe(
             [
-                {"Time": f"{t.time}-{t.end_time()}", "Task": t.description, "Pet": t.pet_name, "Priority": t.priority}
-                for t in plan
+                {
+                    "Time": f"{t.time}-{t.end_time()}",
+                    "Task": task_label(t),
+                    "Pet": t.pet_name,
+                    "Priority": priority_badge(t.priority),
+                }
+                for t in shown
             ],
             hide_index=True,
         )
@@ -273,3 +338,6 @@ else:
         st.info(explanation)
     else:
         st.success(explanation)
+
+# Save after every run, so any change made on this click is on disk before the page finishes.
+owner.save_to_json(DATA_FILE)

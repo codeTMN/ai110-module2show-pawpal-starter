@@ -1,30 +1,35 @@
-"""Demo script: shows PawPal+ planning, conflict warnings, recurring tasks, and filtering.
+"""Demo script: shows PawPal+ planning, priority order, conflict warnings with a suggested
+fix, the next free slot, recurring tasks, and filtering.
 
 Run it with:  python main.py
 """
 
 from datetime import date
 
-from pawpal_system import Owner, Pet, Scheduler, Task
+from tabulate import tabulate
 
-WIDTH = 64
+from display import priority_badge, status_badge, task_label
+from pawpal_system import Owner, Pet, Scheduler, Task
 
 
 def heading(title: str) -> None:
     """Print a section title with a line under it."""
     print(f"\n{title}")
-    print("-" * WIDTH)
+    print("=" * len(title))
 
 
 def print_tasks(tasks: list[Task], show_date: bool = False) -> None:
-    """Print tasks as a simple table, one row per task."""
+    """Print tasks as a table with emojis, color-coded priority, and status."""
     if not tasks:
         print("(none)")
-    for t in tasks:
-        day = f"{t.due_date:%a %b %d}  " if show_date else ""
-        done = "done" if t.completed else ""
-        row = f"{day}{t.time}-{t.end_time()}  {t.description:<18} {t.pet_name:<6} {t.priority:<7} {done}"
-        print(row.rstrip())
+        return
+    rows = [
+        ([f"{t.due_date:%a %b %d}"] if show_date else [])
+        + [f"{t.time}-{t.end_time()}", task_label(t), t.pet_name, priority_badge(t.priority), status_badge(t)]
+        for t in tasks
+    ]
+    headers = (["Date"] if show_date else []) + ["Time", "Task", "Pet", "Priority", "Status"]
+    print(tabulate(rows, headers=headers, tablefmt="rounded_outline"))
 
 
 def build_demo_owner() -> Owner:
@@ -43,6 +48,7 @@ def build_demo_owner() -> Owner:
     mochi.add_task(Task("Breakfast", "08:00", 10, priority="high", frequency="daily"))
     luna.add_task(Task("Breakfast", "08:15", 5, priority="high", frequency="daily"))
     luna.add_task(Task("Call the vet", "07:30", 15, priority="high"))  # same time as the walk
+    mochi.add_task(Task("Dinner", "18:00", 10, priority="high", frequency="daily"))
     return owner
 
 
@@ -55,18 +61,31 @@ def main() -> None:
     plan = scheduler.build_daily_plan()
     heading(f"Today's Schedule for {owner.name} ({date.today():%A, %B %d})")
     print_tasks(plan)
-    print("-" * WIDTH)
     print(scheduler.explain_plan(plan))
 
-    # 2. Check the plan for overlapping tasks.
+    # 2. All of today's tasks in priority order (ties broken by start time). This is
+    #    the order build_daily_plan() picks them in, so it shows why Fetch was skipped.
+    heading("All of today's tasks, by priority then time")
+    print_tasks(scheduler.sort_by_priority(scheduler.filter_tasks(completed=False)))
+
+    # 3. Check the plan for overlapping tasks and suggest a fix.
     heading("Conflict check")
-    conflicts = scheduler.detect_conflicts(plan)
-    for warning in conflicts:
-        print(f"WARNING: {warning}")
-    if not conflicts:
+    pairs = scheduler.find_conflicting_pairs(plan)
+    for (a, b), warning in zip(pairs, scheduler.detect_conflicts(plan)):
+        print(f"⚠️  WARNING: {warning}")
+        suggestion = scheduler.suggest_move(a, b)
+        if suggestion:
+            task, new_time = suggestion
+            print(f"   Suggestion: move {task.pet_name}'s {task.description} to {new_time}, the next free time.")
+    if not pairs:
         print("No conflicts.")
 
-    # 3. Finish a few tasks. Repeating ones come back on their next due date.
+    # 4. Find the next open time for a new task.
+    heading("Next free slot after 07:30")
+    for minutes in (20, 60):
+        print(f"A {minutes}-minute task fits at: {scheduler.find_next_slot(minutes, earliest='07:30')}")
+
+    # 5. Finish a few tasks. Repeating ones come back on their next due date.
     heading("Recurring tasks")
     for name in ("Morning walk", "Flea medicine", "Call the vet"):
         task = next(t for t in owner.get_all_tasks() if t.description == name)
@@ -76,9 +95,9 @@ def main() -> None:
             if next_task
             else "doesn't repeat, nothing added"
         )
-        print(f"Done: {task.description} ({task.pet_name}, {task.frequency}) -> {result}")
+        print(f"✅ {task.description} ({task.pet_name}, {task.frequency}) -> {result}")
 
-    # 4. Filter by pet and by status.
+    # 6. Filter by pet and by status.
     heading("Filter: Mochi's tasks")
     print_tasks(scheduler.sort_by_time(scheduler.filter_tasks(pet_name="Mochi")), show_date=True)
 
