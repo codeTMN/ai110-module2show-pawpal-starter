@@ -25,8 +25,13 @@ The README also mentions owner preferences. I left those out for now. Time and p
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes. After writing the skeleton, I asked the AI to review `pawpal_system.py` for missing relationships and logic problems. It found a few real issues, and I made these changes:
+
+- **Tasks now know which pet they belong to.** In my first draft, a Task had no link back to its Pet. Once the Scheduler pulled every task into one list, there was no way to tell "Mochi's walk" from "Luna's walk," and filtering by pet wouldn't work. I added a `pet_name` field that `Pet.add_task()` fills in on its own.
+- **`complete_task()` only needs the task now.** Since a task knows its pet's name, the Scheduler can find the right pet by itself when it needs to add the next copy of a repeat task. Before, the caller had to pass the pet in as well.
+- **Priority sorts by rank, not by text.** Priority is stored as "low", "medium", or "high". Sorting those as plain words puts "high" first, then "low", then "medium," which is wrong. I added a `priority_rank()` method so sorting uses numbers instead.
+- **The Scheduler remembers what it skipped.** When there isn't enough time, the Scheduler leaves out lower-priority tasks. My first draft just dropped them, so the explanation had no way to mention them. Now they go into a `skipped` list.
+- **Removing a task uses the task itself, not its name.** A pet can have two tasks with the same name, like "Feeding" in the morning and at night, so removing by name could delete the wrong one.
 
 ---
 

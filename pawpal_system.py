@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+PRIORITY_RANK = {"low": 1, "medium": 2, "high": 3}
+
 
 @dataclass
 class Task:
@@ -21,6 +23,7 @@ class Task:
     frequency: str = "once"  # "once", "daily", or "weekly"
     due_date: date = field(default_factory=date.today)
     completed: bool = False
+    pet_name: str = ""  # filled in by Pet.add_task()
 
     def mark_complete(self) -> None:
         """Mark this task as done."""
@@ -34,6 +37,10 @@ class Task:
         """Return when this task finishes as "HH:MM", based on its start time and duration."""
         pass
 
+    def priority_rank(self) -> int:
+        """Return priority as a number (high = 3) so tasks sort in the right order."""
+        pass
+
 
 @dataclass
 class Pet:
@@ -45,11 +52,11 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Add a task to this pet."""
+        """Add a task to this pet and tag it with the pet's name."""
         pass
 
-    def remove_task(self, description: str) -> None:
-        """Remove the task with this description."""
+    def remove_task(self, task: Task) -> None:
+        """Remove this exact task from the pet."""
         pass
 
     def get_pending_tasks(self) -> list[Task]:
@@ -87,11 +94,12 @@ class Scheduler:
 
     def __init__(self, owner: Owner) -> None:
         self.owner = owner
+        self.skipped: list[Task] = []  # tasks left out of the last plan because time ran out
 
     def build_daily_plan(self, day: date | None = None) -> list[Task]:
         """Pick and order the tasks due on `day` (today by default) that fit in the owner's time.
 
-        Higher priority tasks get picked first.
+        Higher priority tasks get picked first. Anything that doesn't fit goes in self.skipped.
         """
         pass
 
@@ -111,8 +119,8 @@ class Scheduler:
         """Return a warning message for each pair of tasks whose time slots overlap."""
         pass
 
-    def complete_task(self, pet: Pet, task: Task) -> None:
-        """Mark a task done. If it repeats, add the next one to the pet."""
+    def complete_task(self, task: Task) -> Task | None:
+        """Mark a task done. If it repeats, add the next one to the same pet and return it."""
         pass
 
     def explain_plan(self, plan: list[Task]) -> str:
