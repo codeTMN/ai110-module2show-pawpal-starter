@@ -27,8 +27,8 @@ def print_tasks(tasks: list[Task], show_date: bool = False) -> None:
         print(row.rstrip())
 
 
-def main() -> None:
-    """Build sample data and walk through each feature."""
+def build_demo_owner() -> Owner:
+    """Create the sample owner, pets, and tasks (also used by the app's "Load sample data" button)."""
     owner = Owner("Jordan", available_minutes=90)
     mochi = Pet("Mochi", "dog", age=3)
     luna = Pet("Luna", "cat", age=5)
@@ -36,17 +36,19 @@ def main() -> None:
     owner.add_pet(luna)
 
     # Added out of order on purpose, so you can see the scheduler sort them.
-    walk = Task("Morning walk", "07:30", 30, priority="high", frequency="daily")
-    flea = Task("Flea medicine", "09:00", 5, priority="medium", frequency="weekly")
-    vet_call = Task("Call the vet", "07:30", 15, priority="high")  # same time as the walk
     mochi.add_task(Task("Fetch in the yard", "17:00", 45, priority="low"))
     luna.add_task(Task("Brush coat", "19:00", 15, priority="medium"))
-    mochi.add_task(walk)
-    luna.add_task(flea)
+    mochi.add_task(Task("Morning walk", "07:30", 30, priority="high", frequency="daily"))
+    luna.add_task(Task("Flea medicine", "09:00", 5, priority="medium", frequency="weekly"))
     mochi.add_task(Task("Breakfast", "08:00", 10, priority="high", frequency="daily"))
     luna.add_task(Task("Breakfast", "08:15", 5, priority="high", frequency="daily"))
-    luna.add_task(vet_call)
+    luna.add_task(Task("Call the vet", "07:30", 15, priority="high"))  # same time as the walk
+    return owner
 
+
+def main() -> None:
+    """Build sample data and walk through each feature."""
+    owner = build_demo_owner()
     scheduler = Scheduler(owner)
 
     # 1. Build today's plan: pick by priority, then sort by time.
@@ -66,7 +68,8 @@ def main() -> None:
 
     # 3. Finish a few tasks. Repeating ones come back on their next due date.
     heading("Recurring tasks")
-    for task in (walk, flea, vet_call):
+    for name in ("Morning walk", "Flea medicine", "Call the vet"):
+        task = next(t for t in owner.get_all_tasks() if t.description == name)
         next_task = scheduler.complete_task(task)
         result = (
             f"next one added for {next_task.due_date:%a %b %d}"
