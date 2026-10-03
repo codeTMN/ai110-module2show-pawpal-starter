@@ -21,7 +21,7 @@ The scheduling "brain" lives in plain Python classes (`pawpal_system.py`), so th
 - **A plain-English explanation.** Every plan comes with a short summary: how many minutes it uses, how it chose tasks, and which tasks were skipped and why.
 - **Friendly input checks.** In the app, a blank name or a second pet with the same name gets a clear message instead of a crash. Underneath, the classes also reject impossible values like a 25:00 start time or a priority of "urgent".
 
-## 🚀 Getting started
+## Getting started
 
 ### Setup
 
@@ -49,7 +49,7 @@ pip install -r requirements.txt
 | `display.py`             | Emojis and color badges shared by the app and the demo                                                                        |
 | `tests/`                 | 47 automated tests: the logic (`test_pawpal.py`), the display helpers (`test_display.py`), and the app itself (`test_app.py`) |
 | `diagrams/uml_final.mmd` | The final class diagram (`diagrams/uml.mmd` is the same diagram)                                                              |
-| `screenshots/` | Screenshots of the app used in this README |
+| `screenshots/`           | Screenshots of the app used in this README                                                                                    |
 | `data.json`              | Your saved pets and tasks. Created by the app, and left out of git on purpose                                                 |
 | `reflection.md`          | My notes on design choices, tradeoffs, testing, and working with AI                                                           |
 | `ai_interactions.md`     | The agent workflow log and the two-model prompt comparison                                                                    |
