@@ -2,10 +2,26 @@
 
 ## 1. System Design
 
+**Core actions**
+
+These are the three main things a user should be able to do in PawPal+:
+
+1. **Add a pet.** The owner enters their name and how much time they have for pet care today, then adds a pet with its name, species, and age. One owner can have more than one pet.
+2. **Add a care task for a pet.** The owner picks a pet and adds a task like a walk, a feeding, or meds. Each task has a start time, how long it takes, how important it is (low, medium, or high), and how often it repeats (once, daily, or weekly).
+3. **See today's plan.** The app gathers today's tasks from every pet, puts them in order, warns about tasks that overlap, leaves out lower-priority tasks if there isn't enough time, and explains why the plan looks the way it does.
+
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+My design has four classes. I kept the data classes small and put the "thinking" in one place, the Scheduler.
+
+- **Task** holds the details of one care activity: what it is, when it starts, how long it takes, its priority, how often it repeats, the date it's due, and whether it's done. It can mark itself complete and make a copy of itself for the next day or week if it repeats.
+- **Pet** holds basic info (name, species, age) and its own list of tasks. It can add and remove tasks and give back the ones that aren't done yet.
+- **Owner** holds the owner's name, how many minutes they have for pet care each day, and their list of pets. It can add, remove, and look up pets, and collect every task from all of them into one list.
+- **Scheduler** is the brain. It takes an Owner and works with all of their tasks: building the daily plan, sorting by time or priority, filtering by pet or status, finding time conflicts, handling repeat tasks when one gets marked done, and writing a short explanation of the plan.
+
+The relationships are simple. An Owner has many Pets, a Pet has many Tasks, and the Scheduler reads from the Owner. I used Python dataclasses for Task, Pet, and Owner because they mostly hold data, and a regular class for Scheduler because it's mostly behavior.
+
+The README also mentions owner preferences. I left those out for now. Time and priority are the two things that matter most for a daily plan, so I'm starting there and will add preferences later if I find one that actually changes the plan.
 
 **b. Design changes**
 
