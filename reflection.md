@@ -46,8 +46,11 @@ One more change came up while I was building the classes: **an owner can't have 
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The biggest tradeoff is that **the scheduler picks tasks greedily by priority.** It goes down the list from high to low and adds each task if it still fits in the owner's time. It doesn't try every combination to find the "best" fit. That means it can leave some minutes unused. For example, if 20 minutes are left and the next task takes 30, it skips that task and moves on, even if two smaller tasks together would have been a better use of the time.
+
+I think that's reasonable here. For a pet owner, the important part is that the high-priority stuff (meds, feeding, walks) always gets in first, and that the plan is easy to understand. "We did the important things first, and this one didn't fit" is something a person can follow and trust. A perfect packing algorithm would be harder to explain and would barely matter with the handful of tasks a person has in a day.
+
+A second, smaller tradeoff: **conflicts are warnings, not fixes.** If two tasks overlap, the scheduler tells you, but it doesn't move anything. It does check full time ranges, not just exact start times, so a 2-hour hike that runs into a 9:00 med dose gets caught. But deciding what to move is left to the owner, since they know things the app doesn't (like whether the vet call can happen during the walk).
 
 ---
 
@@ -60,8 +63,11 @@ One more change came up while I was building the classes: **an owner can't have 
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+When I asked how to make `detect_conflicts()` simpler or faster, the AI suggested a shorter version: sort the tasks by time, then only compare each task to the one right after it. It looked cleaner and faster than checking every pair of tasks.
+
+I didn't take it as-is, because I wasn't sure it caught everything. So I tested both versions on a tricky case: a 2-hour hike starting at 08:00, breakfast at 08:30, and meds at 09:00. The check-every-pair version found both overlaps (hike + breakfast, hike + meds). The shorter version only found one, because it never compared the hike to the meds. Those two aren't next to each other in the list.
+
+I kept the check-every-pair version. It's easy to read, it's correct, and a pet owner might have 10 or 20 tasks in a day, so the speed difference doesn't matter at all. The lesson for me was that "shorter" and "more Pythonic" don't automatically mean "right." It's worth running a quick edge case before swapping in a suggestion.
 
 ---
 

@@ -44,25 +44,51 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Here's what `python main.py` prints. The demo owner has two pets, six tasks, and 90 minutes for pet care. The tasks are added out of order on purpose, so you can see the scheduler sort them:
+Here's what `python main.py` prints. The demo owner has two pets, eight tasks, and 90 minutes for pet care. The tasks are added out of order on purpose, and two of them start at 07:30, so you can see the sorting and the conflict warning:
 
 ```
 Today's Schedule for Jordan (Saturday, October 03)
-========================================================
-Time         Task                 Pet     Priority
---------------------------------------------------------
-07:30-08:00  Morning walk         Mochi   high
-08:00-08:10  Breakfast            Mochi   high
-08:15-08:20  Breakfast            Luna    high
-09:00-09:05  Flea medicine        Luna    medium
-19:00-19:15  Brush coat           Luna    medium
---------------------------------------------------------
-Planned 5 task(s) using 65 of 90 available minutes.
+----------------------------------------------------------------
+07:30-08:00  Morning walk       Mochi  high
+07:30-07:45  Call the vet       Luna   high
+08:00-08:10  Breakfast          Mochi  high
+08:15-08:20  Breakfast          Luna   high
+09:00-09:05  Flea medicine      Luna   medium
+19:00-19:15  Brush coat         Luna   medium
+----------------------------------------------------------------
+Planned 6 task(s) using 80 of 90 available minutes.
 Higher-priority tasks were picked first, then the plan was put in time order.
 Skipped: Fetch in the yard for Mochi (45 min, low priority), not enough time left.
+
+Conflict check
+----------------------------------------------------------------
+WARNING: Mochi's Morning walk (07:30-08:00) overlaps with Luna's Call the vet (07:30-07:45).
+
+Recurring tasks
+----------------------------------------------------------------
+Done: Morning walk (Mochi, daily) -> next one added for Sun Oct 04
+Done: Flea medicine (Luna, weekly) -> next one added for Sat Oct 10
+Done: Call the vet (Luna, once) -> doesn't repeat, nothing added
+
+Filter: Mochi's tasks
+----------------------------------------------------------------
+Sat Oct 03  07:30-08:00  Morning walk       Mochi  high    done
+Sat Oct 03  08:00-08:10  Breakfast          Mochi  high
+Sat Oct 03  17:00-17:45  Fetch in the yard  Mochi  low
+Sun Oct 04  07:30-08:00  Morning walk       Mochi  high
+
+Filter: finished tasks
+----------------------------------------------------------------
+Sat Oct 03  07:30-08:00  Morning walk       Mochi  high    done
+Sat Oct 03  07:30-07:45  Call the vet       Luna   high    done
+Sat Oct 03  09:00-09:05  Flea medicine      Luna   medium  done
 ```
 
-The 45-minute fetch session was the only low-priority task, and it didn't fit in the 25 minutes left, so the scheduler skipped it and said why.
+A few things to notice:
+
+- The 45-minute fetch session was the only low-priority task, and it didn't fit in the 10 minutes left, so the scheduler skipped it and said why.
+- The walk and the vet call both start at 07:30, so the conflict check flags them. Breakfast at 08:00 isn't flagged, because the walk ends right as it starts.
+- Finishing the daily walk adds a new walk for tomorrow, and finishing the weekly flea medicine adds one for next week. The one-time vet call just gets marked done.
 
 ## 🧪 Testing PawPal+
 
@@ -82,14 +108,15 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+These are the parts of the `Scheduler` (and `Task`) that make the plan smarter than a plain to-do list. All of them live in `pawpal_system.py`.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_by_priority()` | `sort_by_time()` orders tasks by due date, then start time, using `sorted()` with a lambda key. `sort_by_priority()` puts high before medium before low, with earlier tasks winning ties. |
+| Daily plan | `Scheduler.build_daily_plan()`, `Scheduler.explain_plan()` | Picks today's unfinished tasks by priority until the owner's available minutes run out, then puts the plan in time order. Anything that doesn't fit goes in `scheduler.skipped`, and the explanation says why. |
+| Filtering | `Scheduler.filter_tasks(pet_name=..., completed=...)` | Shows one pet's tasks, only finished or unfinished tasks, or both at once. Leave an argument out to skip that filter. |
+| Conflict handling | `Scheduler.detect_conflicts()` | Flags any two tasks on the same day whose time ranges overlap, not just exact matches. It returns warning messages instead of raising errors, so the app keeps running and the owner decides what to move. |
+| Recurring tasks | `Scheduler.complete_task()`, `Task.next_occurrence()` | Marking a daily or weekly task done adds a fresh copy for tomorrow or next week, using `timedelta`. A late task comes back starting from today, so it never lands on a date that's already gone. Marking the same task done twice doesn't make duplicates. |
 
 ## 📸 Demo Walkthrough
 

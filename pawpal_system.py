@@ -6,8 +6,9 @@ The Streamlit app (app.py) and the demo script should only talk to these classes
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date
+from dataclasses import dataclass, field, replace
+from datetime import date, timedelta
+from itertools import combinations
 
 PRIORITY_RANK = {"low": 1, "medium": 2, "high": 3}
 FREQUENCIES = ("once", "daily", "weekly")
@@ -53,8 +54,16 @@ class Task:
         self.completed = True
 
     def next_occurrence(self) -> Task | None:
-        """Return a fresh copy of this task for its next due date, or None if it only happens once."""
-        raise NotImplementedError("Recurring tasks are coming in Phase 4.")
+        """Return a fresh copy of this task for its next due date, or None if it only happens once.
+
+        Counts from today or the old due date, whichever is later, so a task that gets
+        finished late doesn't come back with a date that has already passed.
+        """
+        if self.frequency == "once":
+            return None
+        step = timedelta(days=1) if self.frequency == "daily" else timedelta(weeks=1)
+        start_from = max(self.due_date, date.today())
+        return replace(self, due_date=start_from + step, completed=False)
 
     def end_time(self) -> str:
         """Return when this task finishes as "HH:MM", based on its start time and duration."""
@@ -147,24 +156,62 @@ class Scheduler:
         return self.sort_by_time(plan)
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Return tasks ordered by start time, earliest first."""
-        return sorted(tasks, key=lambda t: _to_minutes(t.time))
+        """Return tasks in the order they happen: by due date, then by start time.
+
+        Comparing the "HH:MM" strings directly is safe because Task always stores
+        times zero-padded ("08:05", never "8:05").
+        """
+        return sorted(tasks, key=lambda t: (t.due_date, t.time))
 
     def sort_by_priority(self, tasks: list[Task]) -> list[Task]:
         """Return tasks ordered by priority, highest first. Ties go to the earlier task."""
-        return sorted(tasks, key=lambda t: (-t.priority_rank(), _to_minutes(t.time)))
+        return sorted(tasks, key=lambda t: (-t.priority_rank(), t.time))
 
     def filter_tasks(self, pet_name: str | None = None, completed: bool | None = None) -> list[Task]:
-        """Return the owner's tasks, narrowed down to one pet and/or a done/not-done status."""
-        raise NotImplementedError("Filtering is coming in Phase 4.")
+        """Return the owner's tasks, narrowed down to one pet and/or a done/not-done status.
+
+        Leave an argument as None to skip that filter.
+        """
+        tasks = self.owner.get_all_tasks()
+        if pet_name is not None:
+            tasks = [t for t in tasks if t.pet_name == pet_name]
+        if completed is not None:
+            tasks = [t for t in tasks if t.completed == completed]
+        return tasks
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """Return a warning message for each pair of tasks whose time slots overlap."""
-        raise NotImplementedError("Conflict detection is coming in Phase 4.")
+        """Return a warning message for each pair of tasks on the same day whose time slots overlap.
+
+        Two tasks overlap when each one starts before the other one ends, so a walk from
+        07:30 to 08:00 and breakfast at 08:00 don't clash. This only reports problems;
+        it never raises and never moves tasks, so the owner decides what to change.
+        """
+        warnings = []
+        for a, b in combinations(self.sort_by_time(tasks), 2):
+            if a.due_date != b.due_date:
+                continue
+            a_start, b_start = _to_minutes(a.time), _to_minutes(b.time)
+            if a_start < b_start + b.duration_minutes and b_start < a_start + a.duration_minutes:
+                warnings.append(
+                    f"{a.pet_name}'s {a.description} ({a.time}-{a.end_time()}) overlaps with "
+                    f"{b.pet_name}'s {b.description} ({b.time}-{b.end_time()})."
+                )
+        return warnings
 
     def complete_task(self, task: Task) -> Task | None:
-        """Mark a task done. If it repeats, add the next one to the same pet and return it."""
-        raise NotImplementedError("Recurring tasks are coming in Phase 4.")
+        """Mark a task done. If it repeats, add the next one to the same pet and return it.
+
+        Calling this on a task that's already done does nothing, so a double click
+        can't create two copies of tomorrow's task.
+        """
+        if task.completed:
+            return None
+        task.mark_complete()
+        next_task = task.next_occurrence()
+        pet = self.owner.get_pet(task.pet_name)
+        if next_task is not None and pet is not None:
+            pet.add_task(next_task)
+        return next_task
 
     def explain_plan(self, plan: list[Task]) -> str:
         """Return a short, readable explanation of why the plan looks the way it does."""

@@ -1,4 +1,4 @@
-"""Demo script: sets up an owner with two pets and prints today's schedule.
+"""Demo script: shows PawPal+ planning, conflict warnings, recurring tasks, and filtering.
 
 Run it with:  python main.py
 """
@@ -7,22 +7,28 @@ from datetime import date
 
 from pawpal_system import Owner, Pet, Scheduler, Task
 
+WIDTH = 64
 
-def print_schedule(scheduler: Scheduler, plan: list[Task]) -> None:
-    """Print the plan as a simple table, followed by the explanation."""
-    today = date.today().strftime("%A, %B %d")
-    print(f"Today's Schedule for {scheduler.owner.name} ({today})")
-    print("=" * 56)
-    print(f"{'Time':<12} {'Task':<20} {'Pet':<7} Priority")
-    print("-" * 56)
-    for task in plan:
-        print(f"{task.time}-{task.end_time()}  {task.description:<20} {task.pet_name:<7} {task.priority}")
-    print("-" * 56)
-    print(scheduler.explain_plan(plan))
+
+def heading(title: str) -> None:
+    """Print a section title with a line under it."""
+    print(f"\n{title}")
+    print("-" * WIDTH)
+
+
+def print_tasks(tasks: list[Task], show_date: bool = False) -> None:
+    """Print tasks as a simple table, one row per task."""
+    if not tasks:
+        print("(none)")
+    for t in tasks:
+        day = f"{t.due_date:%a %b %d}  " if show_date else ""
+        done = "done" if t.completed else ""
+        row = f"{day}{t.time}-{t.end_time()}  {t.description:<18} {t.pet_name:<6} {t.priority:<7} {done}"
+        print(row.rstrip())
 
 
 def main() -> None:
-    """Build sample data and show the schedule."""
+    """Build sample data and walk through each feature."""
     owner = Owner("Jordan", available_minutes=90)
     mochi = Pet("Mochi", "dog", age=3)
     luna = Pet("Luna", "cat", age=5)
@@ -30,16 +36,51 @@ def main() -> None:
     owner.add_pet(luna)
 
     # Added out of order on purpose, so you can see the scheduler sort them.
+    walk = Task("Morning walk", "07:30", 30, priority="high", frequency="daily")
+    flea = Task("Flea medicine", "09:00", 5, priority="medium", frequency="weekly")
+    vet_call = Task("Call the vet", "07:30", 15, priority="high")  # same time as the walk
     mochi.add_task(Task("Fetch in the yard", "17:00", 45, priority="low"))
     luna.add_task(Task("Brush coat", "19:00", 15, priority="medium"))
-    mochi.add_task(Task("Morning walk", "07:30", 30, priority="high", frequency="daily"))
-    luna.add_task(Task("Flea medicine", "09:00", 5, priority="medium", frequency="weekly"))
+    mochi.add_task(walk)
+    luna.add_task(flea)
     mochi.add_task(Task("Breakfast", "08:00", 10, priority="high", frequency="daily"))
     luna.add_task(Task("Breakfast", "08:15", 5, priority="high", frequency="daily"))
+    luna.add_task(vet_call)
 
     scheduler = Scheduler(owner)
+
+    # 1. Build today's plan: pick by priority, then sort by time.
     plan = scheduler.build_daily_plan()
-    print_schedule(scheduler, plan)
+    heading(f"Today's Schedule for {owner.name} ({date.today():%A, %B %d})")
+    print_tasks(plan)
+    print("-" * WIDTH)
+    print(scheduler.explain_plan(plan))
+
+    # 2. Check the plan for overlapping tasks.
+    heading("Conflict check")
+    conflicts = scheduler.detect_conflicts(plan)
+    for warning in conflicts:
+        print(f"WARNING: {warning}")
+    if not conflicts:
+        print("No conflicts.")
+
+    # 3. Finish a few tasks. Repeating ones come back on their next due date.
+    heading("Recurring tasks")
+    for task in (walk, flea, vet_call):
+        next_task = scheduler.complete_task(task)
+        result = (
+            f"next one added for {next_task.due_date:%a %b %d}"
+            if next_task
+            else "doesn't repeat, nothing added"
+        )
+        print(f"Done: {task.description} ({task.pet_name}, {task.frequency}) -> {result}")
+
+    # 4. Filter by pet and by status.
+    heading("Filter: Mochi's tasks")
+    print_tasks(scheduler.sort_by_time(scheduler.filter_tasks(pet_name="Mochi")), show_date=True)
+
+    heading("Filter: finished tasks")
+    print_tasks(scheduler.sort_by_time(scheduler.filter_tasks(completed=True)), show_date=True)
 
 
 if __name__ == "__main__":
