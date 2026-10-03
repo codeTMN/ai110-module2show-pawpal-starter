@@ -92,19 +92,45 @@ A few things to notice:
 
 ## 🧪 Testing PawPal+
 
+Run the tests from the project folder (with the virtual environment turned on):
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+Add `-v` to see the name of every test.
+
+### What the tests cover
+
+All 28 tests live in `tests/test_pawpal.py`. They check both the normal "everything works" path and the tricky edge cases:
+
+- **Sorting:** tasks come back in time order, earlier days come before later days, and high priority comes first (with the earlier task winning a tie).
+- **Daily plan:** the plan fits in the owner's available minutes, lower-priority tasks get skipped (and the explanation says so), finished tasks and tasks for other days are left out, and a pet with no tasks gives an empty plan instead of an error.
+- **Recurring tasks:** finishing a daily task creates one for tomorrow, and a weekly task creates one for next week. A one-time task doesn't come back. Finishing the same task twice doesn't make duplicates, and a task finished late comes back tomorrow, not on a date that has already passed.
+- **Conflict detection:** two tasks at the exact same time get flagged, and so do partly overlapping ones. Back-to-back tasks (one ends at 8:00, the next starts at 8:00) and tasks at the same time on different days don't. A long task that runs into two later tasks gets flagged for both.
+- **Filtering and basics:** filtering by pet, by done/not done, and both at once, plus input checks (bad priority, bad time, 0-minute tasks, two pets with the same name).
+
+To make sure the tests actually catch bugs, I broke the code on purpose in five ways, like letting back-to-back tasks count as conflicts or removing the double-click guard. Each time, the matching test failed.
+
+### Sample test output
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.11.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/Base/Desktop/Coding/ai110-module2show-pawpal-starter
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.15.1
+collected 28 items
+
+tests/test_pawpal.py ............................                        [100%]
+
+============================== 28 passed in 0.01s ==============================
 ```
+
+### Confidence level: ★★★★☆ (4 out of 5)
+
+I'm confident in the scheduling logic. Every feature has tests for the normal case and the edge cases, and the tests proved they can catch real mistakes. I'm holding back one star for two reasons. The Streamlit app isn't covered by automated tests (I checked it by clicking through it), and there are cases the scheduler doesn't handle yet, like a task that runs past midnight into the next day.
 
 ## 📐 Smarter Scheduling
 

@@ -75,13 +75,22 @@ I kept the check-every-pair version. It's easy to read, it's correct, and a pet 
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I wrote 28 tests covering the five things the app has to get right: sorting tasks by time, building a daily plan that fits the owner's time, bringing back daily and weekly tasks after they're done, catching overlapping tasks, and filtering by pet or status. I also tested the basic input checks, like rejecting a priority of "urgent" or a time like "25:00".
+
+For each feature I tested the normal case and then the edge cases where bugs like to hide. Some examples: two tasks back to back (8:00 end, 8:00 start) should *not* count as a conflict, finishing the same task twice shouldn't create two copies of tomorrow's task, and a pet with no tasks should give an empty plan instead of crashing.
+
+These tests matter because the scheduler makes decisions for the owner. If sorting or recurrence is quietly wrong, someone could miss a med dose and never know why. All 28 tests passed on the first run, which made me a little suspicious, so I broke the code on purpose in five different ways to see if the tests would notice. Each time, the right test failed. That told me the tests were actually checking something and not just passing by default.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Pretty confident, about 4 out of 5. The core logic is well covered, and I know the tests can catch real mistakes. I'm not giving it a 5 because the Streamlit app itself isn't covered by automated tests (I checked it by clicking through it), and there are a few situations the code doesn't handle yet.
+
+If I had more time, these are the edge cases I'd test next:
+
+- A task that runs past midnight, like 23:30 for 60 minutes. Right now the conflict check wouldn't see it overlap with a 00:15 task the next morning.
+- A task longer than the owner's whole time budget. It should get skipped with a clear reason, but I'd want a test that proves it.
+- Removing a pet that still has tasks, or a repeat task whose pet was removed before the task was marked done.
+- Tests that don't depend on today's date. A few of my tests use `date.today()`, so a test running right at midnight could flip a day.
 
 ---
 
