@@ -165,8 +165,13 @@ else:
                 st.success(f"Added \"{task.description}\" for {pet_choice} at {task.time}.")
 
     if "flash" in st.session_state:
+        # A plain if/else on purpose: Streamlit prints any bare expression to the page,
+        # so a one-line "a if x else b" here would also dump the return value.
         kind, message = st.session_state.pop("flash")
-        st.error(message) if kind == "error" else st.success(message)
+        if kind == "error":
+            st.error(message)
+        else:
+            st.success(message)
 
     to_do = scheduler.sort_by_time(scheduler.filter_tasks(completed=False))
     if to_do:

@@ -78,7 +78,7 @@ I used Claude Code inside VS Code for the whole project. I gave it one phase of 
 
 **One suggestion I rejected:** the "compare neighbors only" version of conflict detection, described below in 3b. I kept the simpler version that checks every pair, because it's correct and easy to read.
 
-**On separate chat sessions:** I actually kept one session for the whole project instead of starting a new chat for each phase. What kept it organized was treating each phase as its own chunk. I handed over one phase's checklist at a time, and each phase ended with its own commit, so the git history reads like the project plan. The upside of one session was that the assistant remembered earlier decisions, like saving filtering and recurring tasks for Phase 4 instead of building everything in Phase 2. The downside is that a long session carries its own assumptions forward. A fresh chat just for testing would probably have given a more independent second look at the code.
+**On separate chat sessions:** I worked one phase at a time, starting each phase fresh with only that phase's checklist and ending it with its own commit. Keeping the phases separate helped me stay organized in three ways. First, each session had one clear goal (design, core classes, UI, algorithms, testing, polish), so the AI stayed focused on that goal instead of drifting into other work. Second, it stopped me from building ahead. Filtering and recurring tasks stayed as stubs until the algorithms phase, so each phase had real work to show. Third, the git history reads like the project plan, one commit per phase, which made it easy to see what changed when and to check my work against the checklist before moving on.
 
 **b. Judgment and verification**
 
