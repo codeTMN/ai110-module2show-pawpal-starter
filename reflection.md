@@ -33,6 +33,8 @@ Yes. After writing the skeleton, I asked the AI to review `pawpal_system.py` for
 - **The Scheduler remembers what it skipped.** When there isn't enough time, the Scheduler leaves out lower-priority tasks. My first draft just dropped them, so the explanation had no way to mention them. Now they go into a `skipped` list.
 - **Removing a task uses the task itself, not its name.** A pet can have two tasks with the same name, like "Feeding" in the morning and at night, so removing by name could delete the wrong one.
 
+One more change came up while I was building the classes: **an owner can't have two pets with the same name.** Tasks find their pet through `pet_name`, so two pets named "Mochi" would make that link unclear. `Owner.add_pet()` now stops you with a clear error instead.
+
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
