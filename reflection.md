@@ -41,8 +41,16 @@ One more change came up while I was building the classes: **an owner can't have 
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+My scheduler looks at four things:
+
+- **Time available.** The owner says how many minutes they have for pet care today. That's a hard limit, so the plan never goes over it.
+- **Priority.** Each task is low, medium, or high. When there isn't enough time for everything, high-priority tasks get picked first.
+- **What's due today.** Only tasks due today that aren't done yet go into the plan. Finished tasks and tasks for other days stay out.
+- **Start times.** Once tasks are picked, they're shown in time order, and any overlapping times get flagged.
+
+I decided priority matters most because missing some things is a much bigger deal than missing others. Skipping a game of fetch is fine. Skipping meds or a meal is not. Time comes right after, because it's the one thing the owner can't stretch. Start times are used to order the plan and catch clashes, but the scheduler doesn't move tasks around, since the owner usually picked those times for a reason (like walking the dog before work).
+
+I left out owner preferences (like "I prefer walks in the morning"). The README mentions them, but time and priority already cover the decisions that matter in a daily plan, and adding preferences would make the plan harder to explain.
 
 **b. Tradeoffs**
 
@@ -58,8 +66,19 @@ A second, smaller tradeoff: **conflicts are warnings, not fixes.** If two tasks 
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used Claude Code inside VS Code for the whole project. I gave it one phase of the assignment at a time, and it drafted the UML, built the classes, wrote the demo script and tests, connected the Streamlit app, and updated the docs. My job was to set the direction, check its work, and decide what to keep.
+
+**The features that helped most:**
+
+- **Editing several files in one go.** Most changes touch more than one file. Adding recurring tasks, for example, meant updating `pawpal_system.py`, `main.py`, the README, and this reflection together. Having the assistant do all of that at once kept everything in sync.
+- **Running its own checks.** The assistant didn't just write code. It ran `main.py`, ran `pytest`, and clicked through the Streamlit app with Streamlit's built-in test tool to make sure things actually worked. A few times this caught real problems before I ever saw them, like a confusing error message for a time typed as "8am", and a table header that was off by one character.
+- **Reviews.** Asking it to review the skeleton in Phase 1 found real design gaps, like tasks not knowing which pet they belonged to (see 1b).
+
+**The most helpful prompts** were ones that asked it to prove something, not just build it. "Would these tests actually catch a bug?" led to breaking the code on purpose to check that the tests failed. "Is this shorter version really the same?" led to the test in 3b.
+
+**One suggestion I rejected:** the "compare neighbors only" version of conflict detection, described below in 3b. I kept the simpler version that checks every pair, because it's correct and easy to read.
+
+**On separate chat sessions:** I actually kept one session for the whole project instead of starting a new chat for each phase. What kept it organized was treating each phase as its own chunk. I handed over one phase's checklist at a time, and each phase ended with its own commit, so the git history reads like the project plan. The upside of one session was that the assistant remembered earlier decisions, like saving filtering and recurring tasks for Phase 4 instead of building everything in Phase 2. The downside is that a long session carries its own assumptions forward. A fresh chat just for testing would probably have given a more independent second look at the code.
 
 **b. Judgment and verification**
 
@@ -98,12 +117,17 @@ If I had more time, these are the edge cases I'd test next:
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+I'm most happy with how the scheduler explains itself. It doesn't just spit out a list. It tells you how much time the plan uses, warns you about clashes with both tasks and times named, and says exactly which task didn't fit and why. That makes it something a real person could trust.
+
+I'm also happy with the split between logic and UI. All the real work happens in four small classes, and the Streamlit app, the command-line demo, and the 28 tests all use those same classes. When something needed fixing, there was only one place to fix it.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+- **Save the data.** Right now everything lives in the browser session, so refreshing the page wipes your pets and tasks. Saving to a small JSON file would fix that.
+- **Handle tasks that run past midnight.** A late walk from 23:30 to 00:30 isn't checked against early tasks the next morning.
+- **Suggest a fix for conflicts.** The app only warns about clashes. It could also suggest the next open time slot for one of the tasks.
+- **Smarter fitting.** The greedy, priority-first approach can leave a few minutes unused. Trying to fill those gaps with smaller tasks would make better use of the owner's time.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+Being the "lead architect" with an AI assistant doesn't mean writing every line. It means deciding what "correct" looks like, then making the AI prove it. The AI is fast at producing code that looks right. It took me asking the right questions to find out whether the code *was* right: tests that pass on the first try don't mean much until you've seen them fail, and a cleaner-looking algorithm isn't better if it misses a case. Designing the classes first (UML, then skeleton, then review) also paid off. Every later phase plugged into that structure without a big rewrite, which tells me the design was doing its job.
